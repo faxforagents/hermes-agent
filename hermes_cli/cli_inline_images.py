@@ -9,15 +9,18 @@ Half-block colors go through that quantization on purpose, like the rest of the 
 
 from __future__ import annotations
 
+import random
 import shutil
 import sys
 from collections.abc import Iterable
 
-from agent.terminal_image import InlineImage, render_inline_image, resolve_inline_mode
+from agent.terminal_image import InlineImage, probe_vscode_images, render_inline_image, resolve_inline_mode
 
 _INDENT = "  "
 _MAX_COLS = 64
 _MAX_ROWS = 16
+# Odds per launch of the "VS Code can show full images" hint: occasional, never every start.
+_VSCODE_HINT_ODDS = 0.2
 
 
 def _zero_width(seq: str) -> str:
@@ -49,6 +52,17 @@ def image_lines(image: InlineImage) -> list[str]:
         up = f"\x1b[{image.rows - 1}A" if image.rows > 1 else ""
         return [""] * (image.rows - 1) + [_INDENT + _zero_width(f"\x1b7{up}{image.transmit}\x1b8")]
     return [_INDENT + "".join(_half_block(t, b) for t, b in row) + "\x1b[0m" for row in image.cells]
+
+
+def vscode_images_hint(configured) -> bool:
+    """Probe VS Code's image support before prompt_toolkit owns the tty; True when the
+    occasional "turn on VS Code images" hint should print this launch.
+
+    Only ``auto`` probes and hints: a pinned mode is the user's own choice.
+    """
+    if str(configured).strip().lower() != "auto" and configured not in (None, True):
+        return False
+    return probe_vscode_images() is False and random.random() < _VSCODE_HINT_ODDS
 
 
 def print_inline_images(cli, paths: Iterable) -> None:
